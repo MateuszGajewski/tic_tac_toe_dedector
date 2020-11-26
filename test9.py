@@ -3,61 +3,72 @@ import imutils
 import statistics
 import numpy as np
 import math
-from decimal import Decimal
-
 image = cv2.imread("a8.jpg")
-kernel = np.ones((3,3), np.uint8)
+kernel = np.ones((2,2), np.uint8)
 #image = cv2.resize(image, (1000, 750))
 #image = cv2.dilate(image, kernel, iterations=1)
 iq = image.copy()
 
 def crop_rect(img, rect):
     # get the parameter of the small rectangle
-    angle = rect
+    center, size, angle = rect[0], rect[1], rect[2]
+    center, size = tuple(map(int, center)), tuple(map(int, size))
 
-    if angle < 90:
-        angle = (90-angle)
-    else:
-        angle = angle-90
-    print("kat", 90-angle)
+    # get row and col num in img
+    height, width = img.shape[0], img.shape[1]
 
+    # calculate the rotation matrix
+    M = cv2.getRotationMatrix2D(center, angle, 1)
+    # rotate the original image
+    img_rot = cv2.warpAffine(img, M, (width, height))
 
-    return img, imutils.rotate_bound(img, angle)
+    # now rotated rectangle becomes vertical, and we crop it
+    img_crop = cv2.getRectSubPix(img_rot, size, center)
+    if angle < -45:
+        angle = -1*(-90 -angle)
+
+    return img_crop, imutils.rotate_bound(img, -angle)
 
 
 def get_central_square(img):
     mask = np.zeros(img.shape[:2], np.uint8)
-    cnts = cv2.findContours(img.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cv2.findContours(img.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
     cnts = sorted(cnts, key=lambda c: (cv2.minAreaRect(c)[1][0] * cv2.minAreaRect(c)[1][1]), reverse=True)
 
-    for (i,c) in enumerate(cnts[0:1]):
+    curr_area = 0
+    curr_index = 0
+    b = -1
+    if len(cnts) > 1:
+        M = cv2.moments(cnts[1])
+    else:
+        M = cv2.moments(cnts[0])
+    cX =0
+    cY =0
+    if M["m00"] != 0:
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+
+    image = cv2.circle(mask, (cX,cY), radius=3, color=(255), thickness=3)
+    for (i, c) in enumerate(cnts[2:]):
         epsilon = 0.005 * cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, epsilon, True)
-        hull = cv2.convexHull(approx)
-    #print(hull)
-    hull1 = np.ndarray((8,1,2), dtype=np.int32)
-    if len(hull) > 8:
-        ind = 0
-        ind1 = 0
-        for i in hull:
-            add = True
-            for j in hull[ind+1:]:
+        approx_area = cv2.contourArea(approx)
+        rect = cv2.minAreaRect(c)
+        box = cv2.boxPoints(cv2.minAreaRect(c))
+        box = np.int0(box)
+        #cv2.drawContours(mask, box, 0, (255), 1)
+        if (rect[1][0]*rect[1][1]) != 0 and (approx_area/(rect[1][0]*rect[1][1])) > 0 :
+            if  cv2.pointPolygonTest(box, (cX,cY), False)==1 and curr_area< approx_area:
+                cv2.drawContours(mask, [c], 0, (255), 1)
+                cv2.drawContours(mask, [box], 0, (255), 1)
+                curr_area = approx_area
+                curr_index = i
+                b = [box, rect]
+        #cv2.drawContours(mask, cnts[curr_index], 0, (255), 1)
+        # cv2.drawContours(mask, [box], 0, (255), 1)
 
-                if (abs(i[0][0] - j[0][0]) < 20) and (abs(i[0][1] - j[0][1]) < 20) and ((i[0][0] != j[0][0]) \
-                        or (i[0][1] != j[0][1])) :
-                    #print(i, j)
-                    add = False
-            if add == True:
-                hull1[ind1][0][0] = np.int32(i[0][0])
-                hull1[ind1][0][1] = np.int32(i[0][1])
-                ind1+=1
-            ind +=1
-        return hull1
-    #print(hull.dtype)
-    #print(hull1)
-
-    return hull
+    return b
 
 
 def recognize(img):
@@ -104,104 +115,6 @@ def recognize(img):
         #cv2.drawContours(mask, [c], -1, (255), 3)
     return mask
 
-def get_angle(hull):
-    print(hull)
-    print("dupa")
-    y_max = hull[hull[:,0,0].argsort()[::-1][:2]]
-    y_min = hull[hull[:, 0, 0].argsort()[:2]]
-    x_max = hull[hull[:, 0, 1].argsort()[::-1][:2]]
-    x_min = hull[hull[:, 0, 1].argsort()[:2]]
-    y_max = y_max[y_max[:, 0, 1].argsort()]
-    y_min = y_min[y_min[:, 0, 1].argsort()]
-    x_max =x_max[x_max[:, 0, 0].argsort()]
-    x_min =x_min[x_min[:, 0, 0].argsort()]
-    print('y_max',y_max)
-    a = np.arctan((y_max[1][0][0] - y_min[1][0][0])/(y_max[1][0][1] - y_min[1][0][1]))
-    a = np.degrees(abs(a))
-    tmp = np.arctan((y_max[0][0][0] - y_min[0][0][0]) / (y_max[0][0][1] - y_min[0][0][1]))
-    tmp = np.degrees(abs(tmp))
-    a = (a+tmp)/2
-
-
-    print(a)
-    return a
-
-def points(hull):
-    y_max = hull[hull[:,0,0].argsort()[::-1][:2]]
-    y_min = hull[hull[:, 0, 0].argsort()[:2]]
-    x_max = hull[hull[:, 0, 1].argsort()[::-1][:2]]
-
-    x_min = hull[hull[:, 0, 1].argsort()[:2]]
-    y_max = y_max[y_max[:, 0, 1].argsort()]
-    y_min = y_min[y_min[:, 0, 1].argsort()]
-    x_max =x_max[x_max[:, 0, 0].argsort()]
-    x_min =x_min[x_min[:, 0, 0].argsort()]
-    print(y_max)
-    a1 = ((y_max[0][0][0] - y_min[0][0][0])) / ((y_max[0][0][1] - y_min[0][0][1]))
-    b1 = (y_min[0][0][1]- (a1 * y_min[0][0][0]))
-    print(a1, b1)
-    p1 = line_intersection((y_max[0][0], y_min[0][0]), (x_min[0][0], x_max[0][0]))
-    p2 =line_intersection((y_max[0][0], y_min[0][0]), (x_min[1][0], x_max[1][0]))
-    p3 = line_intersection((y_max[1][0], y_min[1][0]), (x_min[0][0], x_max[0][0]))
-    p4 = line_intersection((y_max[1][0], y_min[1][0]), (x_min[1][0], x_max[1][0]))
-
-    bo = np.array([p1, p2, p3, p4], dtype=np.int)
-    for i in bo:
-        i[0] = int(i[0])
-        i[1] = int(i[1])
-
-    print(bo)
-    #print("min", bo[:, 1])
-    return bo
-def w_h(hull):
-    y_max = hull[hull[:,0,0].argsort()[::-1][:2]]
-    y_min = hull[hull[:, 0, 0].argsort()[:2]]
-    x_max = hull[hull[:, 0, 1].argsort()[::-1][:2]]
-
-    x_min = hull[hull[:, 0, 1].argsort()[:2]]
-    y_max = y_max[y_max[:, 0, 1].argsort()]
-    y_min = y_min[y_min[:, 0, 1].argsort()]
-    x_max =x_max[x_max[:, 0, 0].argsort()]
-    x_min =x_min[x_min[:, 0, 0].argsort()]
-    print(y_max)
-    a1 = ((y_max[0][0][0] - y_min[0][0][0])) / ((y_max[0][0][1] - y_min[0][0][1]))
-    b1 = (y_min[0][0][1]- (a1 * y_min[0][0][0]))
-    print(a1, b1)
-    p1 = line_intersection((y_max[0][0], y_min[0][0]), (x_min[0][0], x_max[0][0]))
-    p2 =line_intersection((y_max[0][0], y_min[0][0]), (x_min[1][0], x_max[1][0]))
-    p3 = line_intersection((y_max[1][0], y_min[1][0]), (x_min[0][0], x_max[0][0]))
-    p4 = line_intersection((y_max[1][0], y_min[1][0]), (x_min[1][0], x_max[1][0]))
-    bo = np.array([p1, p2, p3, p4])
-    h = (len_between_points(p1, p2) + len_between_points(p4, p3))/2
-    w =(len_between_points(p1, p3) + len_between_points(p2, p4))/2
-    #print("min", bo[:, 1])
-    box = [[0],[[0],[w,h]]]
-    print(box[1][1][1])
-    return box
-
-def len_between_points(p1, p2):
-    print("p1", p1)
-    x = (p1[0] - p2[0])*(p1[0] - p2[0])
-    y = (p1[1] - p2[1])*(p1[1] - p2[1])
-    a = math.sqrt(x+y)
-    return a
-
-def line_intersection(line1, line2):
-    xdiff = (line1[0][0] - line1[1][0], line2[0][0] - line2[1][0])
-    ydiff = (line1[0][1] - line1[1][1], line2[0][1] - line2[1][1])
-
-    def det(a, b):
-        return a[0] * b[1] - a[1] * b[0]
-
-    div = det(xdiff, ydiff)
-    if div == 0:
-        raise Exception('lines do not intersect')
-
-    d = (det(*line1), det(*line2))
-    x = det(d, xdiff) / div
-    y = det(d, ydiff) / div
-    return [x, y]
-
 
 
 def extract(img):
@@ -210,49 +123,57 @@ def extract(img):
     cnts = cv2.findContours(img.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
     cnts = sorted(cnts, key=lambda c: (cv2.boundingRect(c)[2] * cv2.boundingRect(c)[3]), reverse=True)
-    for (i, c) in enumerate(cnts[0:1]):
+    for (i, c) in enumerate(cnts[1:]):
         print(cv2.contourArea(c))
         cv2.drawContours(mask, [c], 0, (255), 1)
     #print(get_central_square(img))
     #cv2.drawContours(mask, [get_central_square(img)], 0, (255), 1)
     box = get_central_square(img)
-    a = get_angle(box)
-    img_crop, img_rot = crop_rect(img,a)
+    #cv2.drawContours(mask, [get_central_square(img)[0]], 0, (255), 1)
+    print(box)
+    #gray[int(0.9 * y):y + int(h * 1.5), int(0.9 * x):int(x + 1.4 * w)]
+    if box == -1:
+        return [mask]
+    img_crop, img_rot = crop_rect(img, box[1])
+    boxes = []
+    boxes.append(((box[1][0][0], box[1][0][1]), (box[1][1][0], box[1][1][1]), box[1][2]))
+    img_crop, img_rot = crop_rect(img, boxes[0])
+    bo = cv2.boxPoints(boxes[0])
+    bo = np.int0(bo)
+    #cv2.drawContours(mask, [bo], 0, (255), 1)
+    #img_crop, img_rot = crop_rect(mask, boxes[0])
     box = get_central_square(img_rot)
-    bo = points(box)
+    bo = cv2.boxPoints(box[1])
+    bo = np.int0(bo)
+    #cv2.drawContours(img_rot, [bo], 0, (127), 1)
+    print(box[1][1][1])
+    #return mask
     ret = []
-    b = box
-    box = w_h(box)
-    d = 1
-    print('min',min(bo[:, 1]))
-    ret.append(img_rot[int(1.05 * (min(bo[:, 1]))): int(0.95 * (max(bo[:, 1]))),
-               int(1.05 * (min(bo[:, 0]))):int(0.95 * (max(bo[:, 0])))])
-
-    ret.append(img_rot[0:int(max(bo[:, 1]) - 1 * int(box[1][1][0])), int(min(bo[:, 0])):int(max(bo[:, 0]))])
-    ret.append(img_rot[min(bo[:, 1]) + d * int(box[1][1][0]):img_rot.shape[0],
+    d =1
+    #img_rot=cv2.dilate(img_rot, (3,3))
+    cv2.imshow("outt", img_rot)
+    ret.append(img_rot[int(1.05*(min(bo[:, 1]))): int(0.95*(max(bo[:, 1])) ),
+               int(1.05*(min(bo[:, 0]))):int(0.95*(max(bo[:, 0])))])
+    ret.append(img_rot[0:max(bo[:, 1])-d*int(box[1][1][0]), min(bo[:,0]):max(bo[:, 0])])
+    ret.append(img_rot[min(bo[:, 1]) +d*int(box[1][1][0]):img_rot.shape[0],
                min(bo[:, 0]):max(bo[:, 0])])
     ret.append(img_rot[min(bo[:, 1]):max(bo[:, 1]),
-               0:min(img_rot.shape[0], max(bo[:, 0]) - d * int(box[1][1][1]))])
+               0:min(img_rot.shape[0],max(bo[:, 0])-d*int(box[1][1][1]))])
     ret.append(img_rot[0:max(bo[:, 1]) - d * int(box[1][1][0]),
-               0:min(img_rot.shape[0], max(bo[:, 0]) - d * int(box[1][1][1]))])
-    ret.append(img_rot[min(bo[:, 1]) + d * int(box[1][1][0]):img_rot.shape[0],
-               0:min(img_rot.shape[0], max(bo[:, 0]) - d * int(box[1][1][1]))])
+               0:min(img_rot.shape[0],max(bo[:, 0])-d*int(box[1][1][1]))])
+    ret.append(img_rot[min(bo[:, 1]) +d * int(box[1][1][0]):img_rot.shape[0],
+               0:min(img_rot.shape[0],max(bo[:, 0])-d*int(box[1][1][1]))])
     ret.append(img_rot[min(bo[:, 1]):max(bo[:, 1]),
-               max(0, min(bo[:, 0]) + d * int(box[1][1][1])):img_rot.shape[1]])
+               max(0, min(bo[:, 0])+d*int(box[1][1][1])):img_rot.shape[1]])
     ret.append(img_rot[0:max(bo[:, 1]) - d * int(box[1][1][0]),
-               max(0, min(bo[:, 0]) + d * int(box[1][1][1])):img_rot.shape[1]])
+               max(0, min(bo[:, 0])+d*int(box[1][1][1])):img_rot.shape[1]])
     ret.append(img_rot[min(bo[:, 1]) + d * int(box[1][1][0]):img_rot.shape[0],
-               max(0, min(bo[:, 0]) + d * int(box[1][1][1])):img_rot.shape[1]])
-
-
-    print(len(box))
-    cv2.drawContours(mask, [b], 0, (255), 1)
+               max(0, min(bo[:, 0])+d*int(box[1][1][1])):img_rot.shape[1]])
     r = []
 
     for i in range(0, len(ret)):
         ret[i] = recognize(ret[i])
         r.append(ret[i])
-
 
     return ret
     #return [img_rot]
@@ -316,7 +237,7 @@ while cnts:
 
     if w * h > 5000:
 
-        boards.append(gray[int(0.8*y):y + int(h*1.2), int(0.8*x):int(x + 1.2*w)])
+        boards.append(gray[int(0.9*y):y + int(h*1.1), int(0.9*x):int(x + 1.1*w)])
         print(w, h)
 
         mask[y:y + h, x:x + w] = 0
