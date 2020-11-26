@@ -4,7 +4,8 @@ import statistics
 import numpy as np
 import math
 from decimal import Decimal
-image = cv2.imread("7.jpg")
+
+image = cv2.imread("z1_d.jpg")
 kernel = np.ones((3,3), np.uint8)
 #image = cv2.resize(image, (800, 800))
 #image = cv2.dilate(image, kernel, iterations=1)
@@ -138,10 +139,47 @@ def points(hull):
     p2 =line_intersection((y_max[0][0], y_min[0][0]), (x_min[1][0], x_max[1][0]))
     p3 = line_intersection((y_max[1][0], y_min[1][0]), (x_min[0][0], x_max[0][0]))
     p4 = line_intersection((y_max[1][0], y_min[1][0]), (x_min[1][0], x_max[1][0]))
-    bo = np.array([p1, p2, p3, p4])
-    #print(bo)
+
+    bo = np.array([p1, p2, p3, p4], dtype=np.int)
+    for i in bo:
+        i[0] = int(i[0])
+        i[1] = int(i[1])
+
+    print(bo)
     #print("min", bo[:, 1])
     return bo
+def w_h(hull):
+    y_max = hull[hull[:,0,0].argsort()[::-1][:2]]
+    y_min = hull[hull[:, 0, 0].argsort()[:2]]
+    x_max = hull[hull[:, 0, 1].argsort()[::-1][:2]]
+
+    x_min = hull[hull[:, 0, 1].argsort()[:2]]
+    y_max = y_max[y_max[:, 0, 1].argsort()]
+    y_min = y_min[y_min[:, 0, 1].argsort()]
+    x_max =x_max[x_max[:, 0, 0].argsort()]
+    x_min =x_min[x_min[:, 0, 0].argsort()]
+    print(y_max)
+    a1 = ((y_max[0][0][0] - y_min[0][0][0])) / ((y_max[0][0][1] - y_min[0][0][1]))
+    b1 = (y_min[0][0][1]- (a1 * y_min[0][0][0]))
+    print(a1, b1)
+    p1 = line_intersection((y_max[0][0], y_min[0][0]), (x_min[0][0], x_max[0][0]))
+    p2 =line_intersection((y_max[0][0], y_min[0][0]), (x_min[1][0], x_max[1][0]))
+    p3 = line_intersection((y_max[1][0], y_min[1][0]), (x_min[0][0], x_max[0][0]))
+    p4 = line_intersection((y_max[1][0], y_min[1][0]), (x_min[1][0], x_max[1][0]))
+    bo = np.array([p1, p2, p3, p4])
+    h = (len_between_points(p1, p2) + len_between_points(p4, p3))/2
+    w =(len_between_points(p1, p3) + len_between_points(p2, p4))/2
+    #print("min", bo[:, 1])
+    box = [[0],[[0],[w,h]]]
+    print(box[1][1][1])
+    return box
+
+def len_between_points(p1, p2):
+    print("p1", p1)
+    x = (p1[0] - p2[0])*(p1[0] - p2[0])
+    y = (p1[1] - p2[1])*(p1[1] - p2[1])
+    a = math.sqrt(x+y)
+    return a
 
 def line_intersection(line1, line2):
     xdiff = (line1[0][0] - line1[1][0], line2[0][0] - line2[1][0])
@@ -178,14 +216,32 @@ def extract(img):
     box = get_central_square(img_rot)
     bo = points(box)
     ret = []
+    b = box
+    box = w_h(box)
+    d = 1
+    print('min',min(bo[:, 1]))
     ret.append(img_rot[int(1.05 * (min(bo[:, 1]))): int(0.95 * (max(bo[:, 1]))),
                int(1.05 * (min(bo[:, 0]))):int(0.95 * (max(bo[:, 0])))])
 
-    ret.append(img_rot[0:max(bo[:, 1]) - d * int(box[1][1][0]), min(bo[:, 0]):max(bo[:, 0])])
+    ret.append(img_rot[0:int(max(bo[:, 1]) - 1 * int(box[1][1][0])), int(min(bo[:, 0])):int(max(bo[:, 0]))])
+    ret.append(img_rot[min(bo[:, 1]) + d * int(box[1][1][0]):img_rot.shape[0],
+               min(bo[:, 0]):max(bo[:, 0])])
+    ret.append(img_rot[min(bo[:, 1]):max(bo[:, 1]),
+               0:min(img_rot.shape[0], max(bo[:, 0]) - d * int(box[1][1][1]))])
+    ret.append(img_rot[0:max(bo[:, 1]) - d * int(box[1][1][0]),
+               0:min(img_rot.shape[0], max(bo[:, 0]) - d * int(box[1][1][1]))])
+    ret.append(img_rot[min(bo[:, 1]) + d * int(box[1][1][0]):img_rot.shape[0],
+               0:min(img_rot.shape[0], max(bo[:, 0]) - d * int(box[1][1][1]))])
+    ret.append(img_rot[min(bo[:, 1]):max(bo[:, 1]),
+               max(0, min(bo[:, 0]) + d * int(box[1][1][1])):img_rot.shape[1]])
+    ret.append(img_rot[0:max(bo[:, 1]) - d * int(box[1][1][0]),
+               max(0, min(bo[:, 0]) + d * int(box[1][1][1])):img_rot.shape[1]])
+    ret.append(img_rot[min(bo[:, 1]) + d * int(box[1][1][0]):img_rot.shape[0],
+               max(0, min(bo[:, 0]) + d * int(box[1][1][1])):img_rot.shape[1]])
 
 
     print(len(box))
-    cv2.drawContours(mask, [box], 0, (255), 1)
+    cv2.drawContours(mask, [b], 0, (255), 1)
 
 
     return ret
