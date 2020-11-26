@@ -4,7 +4,7 @@ import statistics
 import numpy as np
 import math
 from decimal import Decimal
-image = cv2.imread("a2.jpg")
+image = cv2.imread("7.jpg")
 kernel = np.ones((3,3), np.uint8)
 #image = cv2.resize(image, (800, 800))
 #image = cv2.dilate(image, kernel, iterations=1)
@@ -13,6 +13,9 @@ iq = image.copy()
 def crop_rect(img, rect):
     # get the parameter of the small rectangle
     angle = rect
+
+    angle = (90-angle)
+    print("kat", angle)
 
 
     return img, imutils.rotate_bound(img, -angle)
@@ -108,9 +111,12 @@ def get_angle(hull):
     y_min = y_min[y_min[:, 0, 1].argsort()]
     x_max =x_max[x_max[:, 0, 0].argsort()]
     x_min =x_min[x_min[:, 0, 0].argsort()]
-
-    a = np.arctan((y_max[0][0][0] - y_min[0][0][0])/(y_max[0][0][1] - y_min[0][0][1]))
+    print(x_max)
+    a = np.arctan((y_max[1][0][0] - y_min[1][0][0])/(y_max[1][0][1] - y_min[1][0][1]))
     a = np.degrees(abs(a))
+    tmp = np.arctan((y_max[1][0][0] - y_min[1][0][0]) / (y_max[1][0][1] - y_min[1][0][1]))
+    tmp = np.degrees(abs(tmp))
+    a = (a+tmp)/2
     print(a)
     return a
 
@@ -128,10 +134,14 @@ def points(hull):
     a1 = ((y_max[0][0][0] - y_min[0][0][0])) / ((y_max[0][0][1] - y_min[0][0][1]))
     b1 = (y_min[0][0][1]- (a1 * y_min[0][0][0]))
     print(a1, b1)
-    print(line_intersection((y_max[0][0], y_min[0][0]), (x_min[0][0], x_max[0][0])))
-    print(line_intersection((y_max[0][0], y_min[0][0]), (x_min[1][0], x_max[1][0])))
-    print(line_intersection((y_max[1][0], y_min[1][0]), (x_min[0][0], x_max[0][0])))
-    print(line_intersection((y_max[1][0], y_min[1][0]), (x_min[1][0], x_max[1][0])))
+    p1 = line_intersection((y_max[0][0], y_min[0][0]), (x_min[0][0], x_max[0][0]))
+    p2 =line_intersection((y_max[0][0], y_min[0][0]), (x_min[1][0], x_max[1][0]))
+    p3 = line_intersection((y_max[1][0], y_min[1][0]), (x_min[0][0], x_max[0][0]))
+    p4 = line_intersection((y_max[1][0], y_min[1][0]), (x_min[1][0], x_max[1][0]))
+    bo = np.array([p1, p2, p3, p4])
+    #print(bo)
+    #print("min", bo[:, 1])
+    return bo
 
 def line_intersection(line1, line2):
     xdiff = (line1[0][0] - line1[1][0], line2[0][0] - line2[1][0])
@@ -147,7 +157,7 @@ def line_intersection(line1, line2):
     d = (det(*line1), det(*line2))
     x = det(d, xdiff) / div
     y = det(d, ydiff) / div
-    return x, y
+    return [x, y]
 
 
 
@@ -164,14 +174,19 @@ def extract(img):
     #cv2.drawContours(mask, [get_central_square(img)], 0, (255), 1)
     box = get_central_square(img)
     a = get_angle(box)
-    img_crop, img_rot = crop_rect(img,90-a)
+    img_crop, img_rot = crop_rect(img,a)
     box = get_central_square(img_rot)
-    points(box)
+    bo = points(box)
+    ret = []
+    ret.append(img_rot[int(1.05 * (min(bo[:, 1]))): int(0.95 * (max(bo[:, 1]))),
+               int(1.05 * (min(bo[:, 0]))):int(0.95 * (max(bo[:, 0])))])
+
+    ret.append(img_rot[0:max(bo[:, 1]) - d * int(box[1][1][0]), min(bo[:, 0]):max(bo[:, 0])])
 
 
     print(len(box))
     cv2.drawContours(mask, [box], 0, (255), 1)
-    return [img_rot]
+
 
     return ret
     #return [img_rot]
