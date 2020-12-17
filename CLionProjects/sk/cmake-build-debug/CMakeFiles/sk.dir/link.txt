@@ -1,0 +1,1 @@
+/usr/bin/c++  -g   CMakeFiles/sk.dir/main.cpp.o CMakeFiles/sk.dir/communication.cpp.o CMakeFiles/sk.dir/user.cpp.o CMakeFiles/sk.dir/server.cpp.o  -o sk 

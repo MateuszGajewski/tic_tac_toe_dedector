@@ -1,0 +1,3 @@
+/home/arabica/CLionProjects/sk/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/home/arabica/CLionProjects/sk/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/arabica/CLionProjects/sk/cmake-build-debug/CMakeFiles/sk.dir
